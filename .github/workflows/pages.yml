@@ -1,0 +1,46 @@
+name: Publicar PWA de prueba en GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate JavaScript and GTFS inputs
+        run: |
+          node --check app.js
+          python3 - <<'PY'
+          import csv, pathlib
+          root = pathlib.Path('data/gtfs')
+          required = ['routes.txt','trips.txt','stop_times.txt','frequencies.txt','stops.txt','feed_info.txt']
+          for name in required:
+              with (root/name).open(encoding='utf-8', newline='') as f:
+                  rows = list(csv.DictReader(f))
+              if not rows:
+                  raise SystemExit(f'{name}: empty file')
+              print(f'{name}: {len(rows)} rows')
+          PY
+      - name: Upload static site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
