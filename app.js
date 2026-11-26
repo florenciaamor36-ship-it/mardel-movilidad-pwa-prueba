@@ -34,16 +34,18 @@ function renderStops(origin=null) {
   if(origin) list.sort((a,b)=>hav(origin,a)-hav(origin,b));
   const limited=list.slice(0, origin?10:12);
   const route=activeRoute();
+  const lineName=route?.route_short_name||"";
   const hasFrequency=route && data.freq.some(f=>data.tripById.get(f.trip_id)?.route_id===route.route_id);
   $("stops").innerHTML=limited.map(stop=>{
     const distance=origin?hav(origin,stop):null;
     const mins=nextTimes(stop.stop_id);
-    const coords=`${Number(stop.stop_lat).toFixed(5)}, ${Number(stop.stop_lon).toFixed(5)}`;
+    const address=data.addresses?.routes?.[lineName]?.[stop.stop_id]?.text;
+    const title=address||"Esquina no identificada en los datos";
     const times=mins.length?mins.map(m=>`<span class="time">${fmtWait(m)}</span>`).join(''):hasFrequency?`<span class="none">No hay una salida calculable para esta parada ahora.</span>`:`<span class="none">El feed no publica frecuencias para esta línea; no puedo estimar el próximo paso.</span>`;
     const lat=Number(stop.stop_lat),lon=Number(stop.stop_lon);
     const mapApp=`geo:${lat},${lon}?q=${lat},${lon}`;
     const mapWeb=`https://maps.google.com/?q=${lat},${lon}`;
-    return `<article class="stop"><div class="stop-head"><div><div class="stop-title">${esc(stop.stop_name||'Parada')}</div><div class="coords">${coords}</div></div>${distance===null?'':`<span class="distance">${fmtDistance(distance)}</span>`}</div><div class="times">${times}</div><a class="maplink" href="${mapApp}">Abrir en la app de mapas ↗</a> · <a class="maplink" href="${mapWeb}" target="_blank" rel="noopener noreferrer">Google Maps web</a></article>`;
+    return `<article class="stop"><div class="stop-head"><div><div class="stop-title">${esc(title)}</div><div class="address-meta">Parada · Línea ${esc(lineName)}${address?' · cruce aproximado':''}</div></div>${distance===null?'':`<span class="distance">${fmtDistance(distance)}</span>`}</div><div class="times">${times}</div><a class="maplink" href="${mapApp}">Abrir en la app de mapas ↗</a> · <a class="maplink" href="${mapWeb}" target="_blank" rel="noopener noreferrer">Google Maps web</a></article>`;
   }).join('') || '<div class="empty">No hay paradas cargadas para esta línea en el feed.</div>';
   if(!origin && list.length) $("status").textContent=`Mostrando ${limited.length} paradas de ${list.length}. La ubicación es opcional; si la habilitás, se ordenan por cercanía.`;
   else if(origin) $("status").textContent=`Paradas cercanas ordenadas por distancia. La ubicación se procesa localmente.`;
@@ -98,8 +100,12 @@ function locationError(err){
 async function init(){
   try{
     const names=["routes","trips","stop_times","frequencies","stops","feed_info"];
-    const loaded=await Promise.all(names.map(async n=>{const r=await fetch(`${BASE}${n}.txt`);if(!r.ok)throw new Error(`No se pudo leer ${n}.txt`);return csv(await r.text());}));
-    data={routes:loaded[0],trips:loaded[1],stopTimes:loaded[2],freq:loaded[3],stops:loaded[4],feedInfo:loaded[5]};
+    const [loaded,addressResponse]=await Promise.all([
+      Promise.all(names.map(async n=>{const r=await fetch(`${BASE}${n}.txt`);if(!r.ok)throw new Error(`No se pudo leer ${n}.txt`);return csv(await r.text());})),
+      fetch("./data/addresses.json")
+    ]);
+    const addresses=addressResponse.ok?await addressResponse.json():{routes:{}};
+    data={routes:loaded[0],trips:loaded[1],stopTimes:loaded[2],freq:loaded[3],stops:loaded[4],feedInfo:loaded[5],addresses};
     data.stopById=new Map(data.stops.map(s=>[s.stop_id,s])); data.tripById=new Map(data.trips.map(t=>[t.trip_id,t]));
     data.stopTimesByStop=new Map(); data.stopTimesByTrip=new Map(); data.freqByTrip=new Map();
     for(const st of data.stopTimes){let a=data.stopTimesByStop.get(st.stop_id)||[];a.push(st);data.stopTimesByStop.set(st.stop_id,a);let b=data.stopTimesByTrip.get(st.trip_id)||[];b.push(st);data.stopTimesByTrip.set(st.trip_id,b);}

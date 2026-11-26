@@ -8,7 +8,10 @@ Versión estática e instalable para probar estimaciones de paso de colectivos e
 - Solicitud opcional de ubicación para ordenar las paradas de la línea por cercanía. La ubicación se procesa localmente en el dispositivo y no se transmite.
 - Estimaciones aproximadas por frecuencia GTFS cuando hay viajes/frecuencias para la parada seleccionada.
 - Manifest y service worker para instalarla como PWA y conservar la app y el feed en caché.
-- Enlace de cada punto al mapa de OpenStreetMap.
+- Direcciones de esquina para las paradas cuando coinciden con los datos de calles y paradas del proyecto original; no se inventa la altura numérica cuando no está en la fuente.
+- Enlaces de cada punto a la aplicación de mapas del teléfono y a Google Maps web.
+
+Las direcciones derivan de los ficheros estáticos de paradas/recorridos de Mardel Movilidad y Bondi MDP, cruzados con las coordenadas del feed GTFS. La cobertura no es total: cuando no hay coincidencia fiable se indica que la esquina no está identificada.
 
 No equivale a la aplicación web completa del repositorio principal: es un preview estático para validar la instalación y el flujo de estimaciones. No representa al Municipio ni es un sistema oficial de horarios.
 
