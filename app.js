@@ -41,6 +41,7 @@ function renderStops(origin=currentOrigin) {
   const list=buildStopList();
   const route=activeRoute();
   const lineName=route?.route_short_name||"";
+  const frequencyDestinations=[...new Set(data.trips.filter(t=>t.route_id===route?.route_id&&data.freqByTrip.has(t.trip_id)).map(t=>(t.trip_headsign||'Destino no informado').trim()))];
   // The GTFS often lists the two sides/directions of the same intersection as separate stops.
   // Group only when the static source gives them the exact same street-corner label.
   const grouped=new Map();
@@ -61,14 +62,18 @@ function renderStops(origin=currentOrigin) {
     const stopIds=place.stops.map(s=>s.stop_id);
     const predictions=nextTimesByDirection(stopIds);
     const title=place.address||"Dirección no disponible en los datos";
-    const times=predictions.length?predictions.map(item=>`<div class="direction-row"><strong class="direction-name">Sentido con cálculo disponible: hacia ${esc(item.destination)}</strong><span class="arrival-label">Próximo paso estimado en esta esquina</span><div class="times">${item.minutes.slice(0,1).map(m=>`<span class="time">≈ ${fmtWait(m)}</span>`).join('')}</div></div>`).join(''):`<span class="none">El feed no da una próxima estimación para esta parada.</span>`;
-    const missingDirections=[...new Set(stopIds.flatMap(id=>data.stopTimesByStop.get(id)||[]).filter(st=>data.tripById.get(st.trip_id)?.route_id===route?.route_id&&!data.freqByTrip.has(st.trip_id)).map(st=>data.tripById.get(st.trip_id)?.trip_headsign).filter(Boolean))];
-    const notEstimated=missingDirections.length?`<div class="direction-note">Sin frecuencia publicada para: ${missingDirections.map(esc).join(', ')}.</div>`:'';
+    const times=predictions.length?predictions.map(item=>`<div class="direction-row">${frequencyDestinations.length>1?`<strong class="direction-name">Hacia ${esc(item.destination)}</strong>`:''}<span class="arrival-label">Próximo paso estimado en esta esquina</span><div class="times">${item.minutes.slice(0,1).map(m=>`<span class="time">≈ ${fmtWait(m)}</span>`).join('')}</div></div>`).join(''):`<span class="none">Sin estimación en esta esquina: faltan frecuencias en el feed.</span>`;
+    const pointLinks=place.stops.map((point,i)=>{
+      const pointLat=Number(point.stop_lat),pointLon=Number(point.stop_lon);
+      const pointUrl=`https://maps.google.com/?q=${pointLat},${pointLon}`;
+      return `<a class="point-map-link" href="${pointUrl}" target="_blank" rel="noopener noreferrer">Punto ${i+1} ↗</a>`;
+    }).join('');
+    const allPoints=place.stops.length>1?`<details class="points-details"><summary>Ver los ${place.stops.length} puntos exactos de esta esquina</summary><div class="point-map-links">${pointLinks}</div><small>El feed no indica de qué lado de la calle esperar.</small></details>`:'';
     const lat=Number(stop.stop_lat),lon=Number(stop.stop_lon);
     const mapApp=`geo:${lat},${lon}?q=${lat},${lon}`;
     const mapWeb=`https://maps.google.com/?q=${lat},${lon}`;
     const detail=`Parada · Línea ${esc(lineName)}${place.address?' · cruce aproximado':''}${place.stops.length>1?` · ${place.stops.length} puntos de esta esquina agrupados; tiempos separados por destino`:''}`;
-    return `<article class="stop"><div class="stop-head"><div><div class="stop-title">${esc(title)}</div><div class="address-meta">${detail}</div></div>${place.distance===null?'':`<span class="distance">${fmtDistance(place.distance)}</span>`}</div>${times}${notEstimated}<a class="maplink" href="${mapApp}">Abrir en la app de mapas ↗</a> · <a class="maplink" href="${mapWeb}" target="_blank" rel="noopener noreferrer">Google Maps web</a></article>`;
+    return `<article class="stop"><div class="stop-head"><div><div class="stop-title">${esc(title)}</div><div class="address-meta">${detail}</div></div>${place.distance===null?'':`<span class="distance">${fmtDistance(place.distance)}</span>`}</div>${times}<a class="maplink" href="${mapApp}">Abrir en la app de mapas ↗</a> · <a class="maplink" href="${mapWeb}" target="_blank" rel="noopener noreferrer">Google Maps web</a>${allPoints}</article>`;
   }).join('') || '<div class="empty">No hay paradas cargadas para esta línea en el feed.</div>';
   const more=$("moreStops");
   more.hidden=limited.length>=places.length;
@@ -133,9 +138,9 @@ function updateLineStatus(){
   const destinations=[...new Set(trips.map(t=>(t.trip_headsign||'Destino no informado').trim()))];
   const estimatedDestinations=[...new Set(trips.filter(t=>data.freqByTrip.has(t.trip_id)).map(t=>(t.trip_headsign||'Destino no informado').trim()))];
   const unavailable=destinations.filter(d=>!estimatedDestinations.includes(d));
-  const baseStatus=frequencyRows?`${frequencyRows} franjas de frecuencia estimada en el GTFS · validez declarada ${date(start)}–${date(end)}.`:staticStops.length?`El GTFS no trae horarios para esta línea; se muestran ${staticStops.length} paradas estáticas, sin estimación de paso.`:trips.length?`El feed no publica frecuencias para esta línea; no hay horarios de paso confiables para mostrar.`:"El feed no incluye recorridos ni paradas para esta línea.";
-  const directionNotice=frequencyRows&&unavailable.length?` El feed solo permite calcular: ${estimatedDestinations.join(', ')||'ningún destino'}. Sin frecuencias publicadas para: ${unavailable.join(', ')}.`:'';
-  $("lineStatus").textContent=baseStatus+directionNotice;
+  const baseStatus=frequencyRows?`${frequencyRows} franjas de frecuencia en el GTFS · validez declarada ${date(start)}–${date(end)}.`:staticStops.length?`Hay ${staticStops.length} paradas estáticas, pero el GTFS no trae horarios para estimar el paso.`:trips.length?`El feed no publica frecuencias: no se puede calcular el próximo paso.`:"El feed no incluye recorridos ni paradas para esta línea.";
+  const coverage=frequencyRows?`<div class="coverage-label"><strong>Estimación disponible:</strong> ${estimatedDestinations.map(esc).join(', ')||'ningún destino'}.</div>${unavailable.length?`<div class="coverage-missing"><strong>Sin frecuencia:</strong> ${unavailable.map(esc).join(', ')}.</div>`:''}<div class="coverage-caveat">La espera puede cambiar entre esquinas: cada cálculo es independiente; no sigue al mismo micro ni es GPS en vivo.</div>`:'';
+  $("lineStatus").innerHTML=`<div>${esc(baseStatus)}</div>${coverage}`;
   if(trips.length||staticStops.length) renderStops(null); else { $("stops").innerHTML=""; $("status").textContent="El feed no tiene paradas para esta línea."; }
 }
 
@@ -150,7 +155,7 @@ async function init(){
     const names=["routes","trips","stop_times","frequencies","stops","feed_info"];
     const [loaded,addressResponse]=await Promise.all([
       Promise.all(names.map(async n=>{const r=await fetch(`${BASE}${n}.txt`);if(!r.ok)throw new Error(`No se pudo leer ${n}.txt`);return csv(await r.text());})),
-      fetch("./data/addresses.json?v=20261126-7",{cache:"no-store"})
+      fetch("./data/addresses.json?v=20261126-8",{cache:"no-store"})
     ]);
     if(!addressResponse.ok) throw new Error("No se pudo cargar la base de direcciones");
     const addresses=await addressResponse.json();
