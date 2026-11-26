@@ -31,25 +31,34 @@ function buildStopList() {
 }
 function renderStops(origin=null) {
   const list=buildStopList();
-  if(origin) list.sort((a,b)=>hav(origin,a)-hav(origin,b)); else list.sort((a,b)=>a.stop_name.localeCompare(b.stop_name,'es'));
+  if(origin) list.sort((a,b)=>hav(origin,a)-hav(origin,b));
   const limited=list.slice(0, origin?10:12);
+  const route=activeRoute();
+  const hasFrequency=route && data.freq.some(f=>data.tripById.get(f.trip_id)?.route_id===route.route_id);
   $("stops").innerHTML=limited.map(stop=>{
     const distance=origin?hav(origin,stop):null;
     const mins=nextTimes(stop.stop_id);
     const coords=`${Number(stop.stop_lat).toFixed(5)}, ${Number(stop.stop_lon).toFixed(5)}`;
-    const times=mins.length?mins.map(m=>`<span class="time">≈ ${m} min</span>`).join(''):`<span class="none">Sin paso programado próximo disponible en este feed.</span>`;
-    const map=`https://www.openstreetmap.org/?mlat=${encodeURIComponent(stop.stop_lat)}&mlon=${encodeURIComponent(stop.stop_lon)}#map=18/${encodeURIComponent(stop.stop_lat)}/${encodeURIComponent(stop.stop_lon)}`;
-    return `<article class="stop"><div class="stop-head"><div><div class="stop-title">${esc(stop.stop_name||'Parada')}</div><div class="coords">${coords}</div></div>${distance===null?'':`<span class="distance">${fmtDistance(distance)}</span>`}</div><div class="times">${times}</div><a class="maplink" href="${map}" target="_blank" rel="noreferrer">Ver punto en OpenStreetMap ↗</a></article>`;
+    const times=mins.length?mins.map(m=>`<span class="time">${fmtWait(m)}</span>`).join(''):hasFrequency?`<span class="none">No hay una salida calculable para esta parada ahora.</span>`:`<span class="none">El feed no publica frecuencias para esta línea; no puedo estimar el próximo paso.</span>`;
+    const map=`https://maps.google.com/?q=${encodeURIComponent(stop.stop_lat)},${encodeURIComponent(stop.stop_lon)}`;
+    return `<article class="stop"><div class="stop-head"><div><div class="stop-title">${esc(stop.stop_name||'Parada')}</div><div class="coords">${coords}</div></div>${distance===null?'':`<span class="distance">${fmtDistance(distance)}</span>`}</div><div class="times">${times}</div><a class="maplink" href="${map}" target="_blank" rel="noopener noreferrer">Abrir en Google Maps ↗</a></article>`;
   }).join('') || '<div class="empty">No hay paradas cargadas para esta línea en el feed.</div>';
-  if(!origin && list.length) $("status").textContent=`Mostrando ${limited.length} paradas de ${list.length}. Activá la ubicación para ordenar por cercanía.`;
+  if(!origin && list.length) $("status").textContent=`Mostrando ${limited.length} paradas de ${list.length}. La ubicación es opcional; si la habilitás, se ordenan por cercanía.`;
   else if(origin) $("status").textContent=`Paradas cercanas ordenadas por distancia. La ubicación se procesa localmente.`;
 }
+function fmtWait(minutes){
+  if(minutes<60) return `≈ ${minutes} min`;
+  const h=Math.floor(minutes/60),m=minutes%60;
+  return m?`≈ ${h} h ${m} min`:`≈ ${h} h`;
+}
+
+function hasRouteFrequency(routeId){return data.freq.some(f=>data.tripById.get(f.trip_id)?.route_id===routeId);}
 function nextTimes(stopId) {
-  const current=nowSeconds(), tripIds=new Set(lineTrips().map(t=>t.trip_id));
+  const current=nowSeconds(), route=activeRoute(); if(!route||!hasRouteFrequency(route.route_id)) return [];
+  const tripIds=new Set(lineTrips().map(t=>t.trip_id));
   const stopTimes=data.stopTimesByStop.get(stopId)||[]; const output=[];
   for(const st of stopTimes){
     if(!tripIds.has(st.trip_id)) continue;
-    const routeTrip=data.tripById.get(st.trip_id); if(!routeTrip) continue;
     const tripTimes=data.stopTimesByTrip.get(st.trip_id)||[];
     if(!tripTimes.length) continue;
     const first=tripTimes[0]; const offset=(sec(st.arrival_time)??0)-(sec(first.departure_time)??0);
@@ -58,9 +67,9 @@ function nextTimes(stopId) {
       const start=sec(w.start_time),end=sec(w.end_time),headway=+w.headway_secs;
       if(start===null||end===null||!Number.isFinite(headway)||headway<=0) continue;
       const base=start+offset; let n=Math.max(0,Math.ceil((current-base)/headway));
-      for(let k=0;k<3;k++,n++){
+      for(let k=0;k<4;k++,n++){
         const leave=start+n*headway, at=leave+offset;
-        if(leave>=end||at<current||at>current+2*3600) break;
+        if(leave>=end||at<current||at>current+24*3600) break;
         const m=Math.max(1,Math.ceil((at-current)/60)); output.push(m);
       }
     }
@@ -70,11 +79,12 @@ function nextTimes(stopId) {
 function updateLineStatus(){
   const route=activeRoute(); if(!route)return;
   const trips=data.trips.filter(t=>t.route_id===route.route_id);
+  const frequencyRows=data.freq.filter(f=>data.tripById.get(f.trip_id)?.route_id===route.route_id).length;
   const service=data.feedInfo[0];
   const start=service?.feed_start_date||"",end=service?.feed_end_date||"";
   const date=s=>s.length===8?`${s.slice(6,8)}/${s.slice(4,6)}/${s.slice(0,4)}`:s;
-  $("lineStatus").textContent=trips.length?`${trips.length} recorridos/variantes en el GTFS · validez declarada ${date(start)}–${date(end)}.`:"El feed identifica la línea, pero no incluye viajes para estimar el paso.";
-  if(trips.length) renderStops(null); else { $("stops").innerHTML=""; $("status").textContent="No hay horarios programados para esta línea en el feed disponible."; }
+  $("lineStatus").textContent=frequencyRows?`${frequencyRows} franjas de frecuencia estimada en el GTFS · validez declarada ${date(start)}–${date(end)}.`:trips.length?`El feed no publica frecuencias para esta línea; no hay horarios de paso confiables para mostrar.`:"El feed no incluye recorridos ni horarios para esta línea.";
+  if(trips.length) renderStops(null); else { $("stops").innerHTML=""; $("status").textContent="El feed no tiene paradas para esta línea."; }
 }
 
 function locationError(err){
@@ -94,6 +104,7 @@ async function init(){
     for(const arr of data.stopTimesByTrip.values())arr.sort((a,b)=>+a.stop_sequence- +b.stop_sequence);
     for(const f of data.freq){let a=data.freqByTrip.get(f.trip_id)||[];a.push(f);data.freqByTrip.set(f.trip_id,a);}
     const select=$("line"); select.innerHTML=data.routes.slice().sort((a,b)=>a.route_short_name.localeCompare(b.route_short_name,'es',{numeric:true})).map(r=>`<option value="${esc(r.route_id)}">Línea ${esc(r.route_short_name)}</option>`).join('');
+    if(data.routes.some(r=>r.route_id==="r511")) select.value="r511";
     select.disabled=false; $("locate").disabled=false; select.addEventListener('change',updateLineStatus); updateLineStatus();
     $("status").textContent=`Feed GTFS cargado · ${data.trips.length} viajes, ${data.stops.length} puntos de parada.`;
   }catch(e){$("status").textContent=`No pude cargar los horarios: ${e.message}. Revisá la conexión e intentá recargar.`;}
