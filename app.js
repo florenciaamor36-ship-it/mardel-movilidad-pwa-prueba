@@ -62,7 +62,7 @@ function renderStops(origin=currentOrigin) {
     const stopIds=place.stops.map(s=>s.stop_id);
     const predictions=nextTimesByDirection(stopIds);
     const title=place.address||"Dirección no disponible en los datos";
-    const times=predictions.length?predictions.map(item=>`<div class="direction-row">${frequencyDestinations.length>1?`<strong class="direction-name">Hacia ${esc(item.destination)}</strong>`:''}<span class="arrival-label">Próximo paso estimado en esta esquina</span><div class="times">${item.minutes.slice(0,1).map(m=>`<span class="time">≈ ${fmtWait(m)}</span>`).join('')}</div></div>`).join(''):`<span class="none">Sin estimación en esta esquina: faltan frecuencias en el feed.</span>`;
+    const times=predictions.length?predictions.map(item=>`<div class="direction-row">${frequencyDestinations.length>1?`<strong class="direction-name">Hacia ${esc(item.destination)}</strong>`:''}<span class="arrival-label">Próximo paso estimado en esta esquina</span><div class="times">${item.minutes.slice(0,1).map(m=>`<span class="time">${fmtWait(m)}</span>`).join('')}</div></div>`).join(''):`<span class="none">Sin estimación en esta esquina: faltan frecuencias en el feed.</span>`;
     const pointLinks=place.stops.map((point,i)=>{
       const pointLat=Number(point.stop_lat),pointLon=Number(point.stop_lon);
       const pointUrl=`https://maps.google.com/?q=${pointLat},${pointLon}`;
@@ -155,7 +155,7 @@ async function init(){
     const names=["routes","trips","stop_times","frequencies","stops","feed_info"];
     const [loaded,addressResponse]=await Promise.all([
       Promise.all(names.map(async n=>{const r=await fetch(`${BASE}${n}.txt`);if(!r.ok)throw new Error(`No se pudo leer ${n}.txt`);return csv(await r.text());})),
-      fetch("./data/addresses.json?v=20261126-8",{cache:"no-store"})
+      fetch("./data/addresses.json?v=20261126-9",{cache:"no-store"})
     ]);
     if(!addressResponse.ok) throw new Error("No se pudo cargar la base de direcciones");
     const addresses=await addressResponse.json();
