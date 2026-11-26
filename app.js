@@ -25,9 +25,12 @@ function esc(s) { return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;
 function activeRoute() { return data.routes.find(r=>r.route_id===$("line").value); }
 function lineTrips() { const r=activeRoute(); return data.trips.filter(t=>t.route_id===r?.route_id); }
 function buildStopList() {
+  const route=activeRoute();
   const tripIds=new Set(lineTrips().map(t=>t.trip_id));
   const ids=new Set(data.stopTimes.filter(s=>tripIds.has(s.trip_id)).map(s=>s.stop_id));
-  return [...ids].map(id=>data.stopById.get(id)).filter(Boolean);
+  const timetableStops=[...ids].map(id=>data.stopById.get(id)).filter(Boolean);
+  if(timetableStops.length) return timetableStops;
+  return (data.addresses?.static_stops?.[route?.route_short_name]||[]).map(s=>({stop_id:s.stop_id,stop_name:"Parada",stop_lat:s.lat,stop_lon:s.lng}));
 }
 function renderStops(origin=null) {
   const list=buildStopList();
@@ -84,11 +87,12 @@ function updateLineStatus(){
   const route=activeRoute(); if(!route)return;
   const trips=data.trips.filter(t=>t.route_id===route.route_id);
   const frequencyRows=data.freq.filter(f=>data.tripById.get(f.trip_id)?.route_id===route.route_id).length;
+  const staticStops=data.addresses?.static_stops?.[route.route_short_name]||[];
   const service=data.feedInfo[0];
   const start=service?.feed_start_date||"",end=service?.feed_end_date||"";
   const date=s=>s.length===8?`${s.slice(6,8)}/${s.slice(4,6)}/${s.slice(0,4)}`:s;
-  $("lineStatus").textContent=frequencyRows?`${frequencyRows} franjas de frecuencia estimada en el GTFS · validez declarada ${date(start)}–${date(end)}.`:trips.length?`El feed no publica frecuencias para esta línea; no hay horarios de paso confiables para mostrar.`:"El feed no incluye recorridos ni horarios para esta línea.";
-  if(trips.length) renderStops(null); else { $("stops").innerHTML=""; $("status").textContent="El feed no tiene paradas para esta línea."; }
+  $("lineStatus").textContent=frequencyRows?`${frequencyRows} franjas de frecuencia estimada en el GTFS · validez declarada ${date(start)}–${date(end)}.`:staticStops.length?`El GTFS no trae horarios para esta línea; se muestran ${staticStops.length} paradas estáticas, sin estimación de paso.`:trips.length?`El feed no publica frecuencias para esta línea; no hay horarios de paso confiables para mostrar.`:"El feed no incluye recorridos ni paradas para esta línea.";
+  if(trips.length||staticStops.length) renderStops(null); else { $("stops").innerHTML=""; $("status").textContent="El feed no tiene paradas para esta línea."; }
 }
 
 function locationError(err){
