@@ -74,8 +74,14 @@ function updateLineStatus(){
   const start=service?.feed_start_date||"",end=service?.feed_end_date||"";
   const date=s=>s.length===8?`${s.slice(6,8)}/${s.slice(4,6)}/${s.slice(0,4)}`:s;
   $("lineStatus").textContent=trips.length?`${trips.length} recorridos/variantes en el GTFS · validez declarada ${date(start)}–${date(end)}.`:"El feed identifica la línea, pero no incluye viajes para estimar el paso.";
-  $("stops").innerHTML="";
-  $("status").textContent=trips.length?"Elegí «Usar mi ubicación» para ver las paradas más cercanas.":"No hay horarios programados para esta línea en el feed disponible.";
+  if(trips.length) renderStops(null); else { $("stops").innerHTML=""; $("status").textContent="No hay horarios programados para esta línea en el feed disponible."; }
+}
+
+function locationError(err){
+  if(err.code===1) $("status").textContent="Permiso de ubicación bloqueado. Abrí esta página en Chrome y habilitá Ubicación para este sitio (candado junto a la dirección → Permisos).";
+  else if(err.code===2) $("status").textContent="El teléfono no pudo determinar la ubicación. Activá Ubicación/GPS en Android y probá cerca de una ventana o al aire libre. También podés elegir una parada de la lista.";
+  else if(err.code===3) $("status").textContent="La ubicación tardó demasiado. Confirmá que Ubicación esté activada y volvé a tocar; mientras tanto podés elegir una parada de la lista.";
+  else $("status").textContent=`No pude obtener la ubicación${err.message?`: ${err.message}`:""}. Abrí la página en Chrome, verificá el permiso de Ubicación y probá de nuevo. También podés elegir una parada de la lista.`;
 }
 async function init(){
   try{
@@ -95,7 +101,7 @@ async function init(){
 $("locate").addEventListener('click',()=>{
   if(!navigator.geolocation){$("status").textContent="Este navegador no permite geolocalización.";return;}
   $("status").textContent="Buscando tu ubicación…";
-  navigator.geolocation.getCurrentPosition(pos=>renderStops({lat:pos.coords.latitude,lon:pos.coords.longitude}),err=>{$("status").textContent=err.code===1?"No diste permiso de ubicación. Podés habilitarlo en el navegador y probar de nuevo.":"No pude obtener la ubicación. Revisá el permiso y el GPS del teléfono.";},{enableHighAccuracy:true,timeout:12000,maximumAge:120000});
+  navigator.geolocation.getCurrentPosition(pos=>renderStops({lat:pos.coords.latitude,lon:pos.coords.longitude}),locationError,{enableHighAccuracy:false,timeout:25000,maximumAge:120000});
 });
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$("install").classList.remove('hidden');});
 $("install").addEventListener('click',async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$("install").classList.add('hidden');});
