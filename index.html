@@ -2,14 +2,14 @@
 <html lang="es-AR">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#10131a"><meta name="description" content="Estimaciones de paso del colectivo en Mar del Plata usando horarios GTFS. No es GPS en vivo.">
+  <meta name="theme-color" content="#10131a"><meta name="description" content="Próxima estimación de paso por esquina basada en GTFS; datos parciales y no GPS en vivo.">
   <link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./assets/icon-192.png"><link rel="apple-touch-icon" href="./assets/icon-192.png">
   <link rel="stylesheet" href="./styles.css"><title>Mardel Movilidad · prueba</title>
 </head>
 <body>
   <header class="top"><div class="brand"><div class="brand-icon">🚍</div><div><strong>Mardel Movilidad</strong><small>PRUEBA INSTALABLE · ESTIMACIONES GTFS</small></div></div><button id="install" class="install hidden">Instalar</button></header>
   <main>
-    <section class="hero"><span class="eyebrow">MAR DEL PLATA · TRANSPORTE URBANO</span><h1>Tu próximo bondi,<br><em>aproximado.</em></h1><p>Elegí una línea y buscá las paradas cercanas. Si el horario alcanza para esa parada, te mostramos una estimación.</p></section>
+    <section class="hero"><span class="eyebrow">MAR DEL PLATA · TRANSPORTE URBANO</span><h1>Próximo paso,<br><em>estimado.</em></h1><p>Elegí una línea para ver la próxima estimación disponible en cada esquina. Los horarios pueden faltar para destinos o sentidos.</p></section>
     <section class="panel">
       <label for="line">1. Elegí la línea</label><select id="line" disabled><option>Cargando datos…</option></select>
       <div id="lineStatus" class="hint"></div>
@@ -20,9 +20,9 @@
       <div id="stops" class="stops"></div>
       <button id="moreStops" class="more-stops" type="button" hidden>Ver más paradas</button>
     </section>
-    <section class="note"><strong>Importante</strong><p>Las estimaciones se recalculan automáticamente cada minuto mientras la app está abierta y al volver a ella. Se basan en el feed GTFS de Bondi MDP: no detectan la ubicación real del colectivo ni consideran tránsito, demoras o cambios del servicio. No son GPS en vivo; confirmá antes de viajar.</p><p>Las direcciones muestran esquinas obtenidas de los datos de paradas y recorridos; la altura numérica no está disponible para todas. Si no hay una esquina coincidente, la app lo indica en lugar de inventarla.</p></section>
+    <section class="note"><strong>Importante</strong><p>Las estimaciones se recalculan cada minuto mientras la app está abierta y al volver a ella. Son cálculos aproximados desde el GTFS, no ubicación real del colectivo; no consideran tránsito, demoras ni cambios del servicio. Los minutos corresponden a la próxima pasada estimada por esa esquina, no a un micro identificado ni a GPS en vivo.</p><p>Las direcciones muestran esquinas obtenidas de los datos de paradas y recorridos; la altura numérica no está disponible para todas. Si no hay una esquina coincidente, la app lo indica en lugar de inventarla.</p></section>
     <footer>Datos estáticos de <a href="https://github.com/cuando-llega-mi-bondi/cuando-llega-mi-bondi" target="_blank" rel="noreferrer">Bondi MDP</a> · licencia MIT · Versión de prueba no oficial.</footer>
   </main>
-  <script src="./app.js?v=20261126-6" defer></script>
+  <script src="./app.js?v=20261126-7" defer></script>
 </body>
 </html>

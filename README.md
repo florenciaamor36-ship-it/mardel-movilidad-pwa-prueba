@@ -7,7 +7,8 @@ Versión estática e instalable para probar estimaciones de paso de colectivos e
 - Selección de las líneas y servicios incluidos en el feed GTFS.
 - Estimaciones aproximadas identificadas por destino/sentido cuando el GTFS publica una frecuencia; otros destinos se marcan sin estimación.
 - Solicitud opcional de ubicación para ordenar las paradas de la línea por cercanía. La ubicación se procesa localmente en el dispositivo y no se transmite.
-- Estimaciones aproximadas por frecuencia GTFS, separadas por el destino que informa el feed (por ejemplo, «Hacia Al Puerto»). Los destinos sin frecuencia publicada se identifican sin inventar una espera.
+- Muestra una sola próxima estimación por esquina y el destino publicado por el GTFS; la app no identifica un micro real ni muestra llegadas consecutivas como si fueran confirmadas.
+- Los destinos sin frecuencia publicada se identifican sin inventar una espera. La cobertura puede ser parcial y no representar ambos sentidos.
 - Recalcula el tiempo cada minuto y al volver a primer plano, como cuenta regresiva orientativa; no rastrea colectivos en vivo.
 - Lista de paradas completa con botón «Ver más», agrupando los puntos duplicados de una misma esquina.
 - Manifest y service worker para instalarla como PWA y conservar la app y el feed en caché.
