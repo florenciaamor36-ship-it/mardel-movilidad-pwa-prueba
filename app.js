@@ -40,8 +40,10 @@ function renderStops(origin=null) {
     const mins=nextTimes(stop.stop_id);
     const coords=`${Number(stop.stop_lat).toFixed(5)}, ${Number(stop.stop_lon).toFixed(5)}`;
     const times=mins.length?mins.map(m=>`<span class="time">${fmtWait(m)}</span>`).join(''):hasFrequency?`<span class="none">No hay una salida calculable para esta parada ahora.</span>`:`<span class="none">El feed no publica frecuencias para esta línea; no puedo estimar el próximo paso.</span>`;
-    const map=`https://maps.google.com/?q=${encodeURIComponent(stop.stop_lat)},${encodeURIComponent(stop.stop_lon)}`;
-    return `<article class="stop"><div class="stop-head"><div><div class="stop-title">${esc(stop.stop_name||'Parada')}</div><div class="coords">${coords}</div></div>${distance===null?'':`<span class="distance">${fmtDistance(distance)}</span>`}</div><div class="times">${times}</div><a class="maplink" href="${map}" target="_blank" rel="noopener noreferrer">Abrir en Google Maps ↗</a></article>`;
+    const lat=Number(stop.stop_lat),lon=Number(stop.stop_lon);
+    const mapApp=`geo:${lat},${lon}?q=${lat},${lon}`;
+    const mapWeb=`https://maps.google.com/?q=${lat},${lon}`;
+    return `<article class="stop"><div class="stop-head"><div><div class="stop-title">${esc(stop.stop_name||'Parada')}</div><div class="coords">${coords}</div></div>${distance===null?'':`<span class="distance">${fmtDistance(distance)}</span>`}</div><div class="times">${times}</div><a class="maplink" href="${mapApp}">Abrir en la app de mapas ↗</a> · <a class="maplink" href="${mapWeb}" target="_blank" rel="noopener noreferrer">Google Maps web</a></article>`;
   }).join('') || '<div class="empty">No hay paradas cargadas para esta línea en el feed.</div>';
   if(!origin && list.length) $("status").textContent=`Mostrando ${limited.length} paradas de ${list.length}. La ubicación es opcional; si la habilitás, se ordenan por cercanía.`;
   else if(origin) $("status").textContent=`Paradas cercanas ordenadas por distancia. La ubicación se procesa localmente.`;
