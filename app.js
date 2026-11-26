@@ -2,6 +2,8 @@ const BASE = "./data/gtfs/";
 const $ = (id) => document.getElementById(id);
 let data = null;
 let installPrompt = null;
+let visibleStopLimit = 12;
+let currentOrigin = null;
 
 function csv(text) {
   const rows = []; let row = [], value = "", quoted = false;
@@ -32,7 +34,8 @@ function buildStopList() {
   if(timetableStops.length) return timetableStops;
   return (data.addresses?.static_stops?.[route?.route_short_name]||[]).map(s=>({stop_id:s.stop_id,stop_name:"Parada",stop_lat:s.lat,stop_lon:s.lng}));
 }
-function renderStops(origin=null) {
+function renderStops(origin=currentOrigin) {
+  currentOrigin=origin;
   const list=buildStopList();
   const route=activeRoute();
   const lineName=route?.route_short_name||"";
@@ -50,7 +53,7 @@ function renderStops(origin=null) {
     return {...group,representative,distance:origin?Math.min(...group.stops.map(s=>hav(origin,s))):null};
   });
   if(origin) places.sort((a,b)=>a.distance-b.distance);
-  const limited=places.slice(0, origin?10:12);
+  const limited=places.slice(0, origin?Math.max(10,visibleStopLimit):visibleStopLimit);
   $("stops").innerHTML=limited.map(place=>{
     const stop=place.representative;
     const stopIds=place.stops.map(s=>s.stop_id);
@@ -62,11 +65,14 @@ function renderStops(origin=null) {
     const lat=Number(stop.stop_lat),lon=Number(stop.stop_lon);
     const mapApp=`geo:${lat},${lon}?q=${lat},${lon}`;
     const mapWeb=`https://maps.google.com/?q=${lat},${lon}`;
-    const detail=`Parada · Línea ${esc(lineName)}${place.address?' · cruce aproximado':''}${place.stops.length>1?` · ${place.stops.length} puntos cercanos agrupados`:''}`;
+    const detail=`Parada · Línea ${esc(lineName)}${place.address?' · cruce aproximado':''}${place.stops.length>1?` · ${place.stops.length} puntos de esta esquina agrupados; tiempos separados por destino`:''}`;
     return `<article class="stop"><div class="stop-head"><div><div class="stop-title">${esc(title)}</div><div class="address-meta">${detail}</div></div>${place.distance===null?'':`<span class="distance">${fmtDistance(place.distance)}</span>`}</div>${times}${notEstimated}<a class="maplink" href="${mapApp}">Abrir en la app de mapas ↗</a> · <a class="maplink" href="${mapWeb}" target="_blank" rel="noopener noreferrer">Google Maps web</a></article>`;
   }).join('') || '<div class="empty">No hay paradas cargadas para esta línea en el feed.</div>';
-  if(!origin && list.length) $("status").textContent=`Mostrando ${limited.length} esquinas agrupadas de ${list.length} puntos de parada. La ubicación es opcional; si la habilitás, se ordenan por cercanía.`;
-  else if(origin) $("status").textContent=`Esquinas cercanas agrupadas y ordenadas por distancia. La ubicación se procesa localmente.`;
+  const more=$("moreStops");
+  more.hidden=limited.length>=places.length;
+  more.textContent=`Ver más paradas (${places.length-limited.length} restantes)`;
+  if(!origin && list.length) $("status").textContent=`Mostrando ${limited.length} de ${places.length} esquinas agrupadas. La ubicación es opcional; si la habilitás, se ordenan por cercanía.`;
+  else if(origin) $("status").textContent=`Mostrando ${limited.length} de ${places.length} esquinas cercanas, ordenadas por distancia. La ubicación se procesa localmente.`;
 }
 function fmtWait(minutes){
   if(minutes<60) return `≈ ${minutes} min`;
@@ -106,6 +112,7 @@ function nextTimesByDirection(stopIds) {
 }
 function updateLineStatus(){
   const route=activeRoute(); if(!route)return;
+  visibleStopLimit=12; currentOrigin=null;
   const trips=data.trips.filter(t=>t.route_id===route.route_id);
   const frequencyRows=data.freq.filter(f=>data.tripById.get(f.trip_id)?.route_id===route.route_id).length;
   const staticStops=data.addresses?.static_stops?.[route.route_short_name]||[];
@@ -127,7 +134,7 @@ async function init(){
     const names=["routes","trips","stop_times","frequencies","stops","feed_info"];
     const [loaded,addressResponse]=await Promise.all([
       Promise.all(names.map(async n=>{const r=await fetch(`${BASE}${n}.txt`);if(!r.ok)throw new Error(`No se pudo leer ${n}.txt`);return csv(await r.text());})),
-      fetch("./data/addresses.json?v=20261126-4",{cache:"no-store"})
+      fetch("./data/addresses.json?v=20261126-5",{cache:"no-store"})
     ]);
     if(!addressResponse.ok) throw new Error("No se pudo cargar la base de direcciones");
     const addresses=await addressResponse.json();
@@ -146,8 +153,9 @@ async function init(){
 $("locate").addEventListener('click',()=>{
   if(!navigator.geolocation){$("status").textContent="Este navegador no permite geolocalización.";return;}
   $("status").textContent="Buscando tu ubicación…";
-  navigator.geolocation.getCurrentPosition(pos=>renderStops({lat:pos.coords.latitude,lon:pos.coords.longitude}),locationError,{enableHighAccuracy:false,timeout:25000,maximumAge:120000});
+  navigator.geolocation.getCurrentPosition(pos=>{visibleStopLimit=10;renderStops({lat:pos.coords.latitude,lon:pos.coords.longitude});},locationError,{enableHighAccuracy:false,timeout:25000,maximumAge:120000});
 });
+$("moreStops").addEventListener('click',()=>{visibleStopLimit+=12;renderStops(currentOrigin);});
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$("install").classList.remove('hidden');});
 $("install").addEventListener('click',async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$("install").classList.add('hidden');});
 window.addEventListener('appinstalled',()=>$("install").classList.add('hidden'));
