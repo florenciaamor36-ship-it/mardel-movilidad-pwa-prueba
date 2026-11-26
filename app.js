@@ -4,6 +4,8 @@ let data = null;
 let installPrompt = null;
 let visibleStopLimit = 12;
 let currentOrigin = null;
+let refreshTimeout = null;
+let refreshInterval = null;
 
 function csv(text) {
   const rows = []; let row = [], value = "", quoted = false;
@@ -71,8 +73,17 @@ function renderStops(origin=currentOrigin) {
   const more=$("moreStops");
   more.hidden=limited.length>=places.length;
   more.textContent=`Ver más paradas (${places.length-limited.length} restantes)`;
-  if(!origin && list.length) $("status").textContent=`Mostrando ${limited.length} de ${places.length} esquinas agrupadas. La ubicación es opcional; si la habilitás, se ordenan por cercanía.`;
-  else if(origin) $("status").textContent=`Mostrando ${limited.length} de ${places.length} esquinas cercanas, ordenadas por distancia. La ubicación se procesa localmente.`;
+  const updated=new Intl.DateTimeFormat('es-AR',{timeZone:'America/Argentina/Buenos_Aires',hour:'2-digit',minute:'2-digit'}).format(new Date());
+  if(!origin && list.length) $("status").textContent=`Mostrando ${limited.length} de ${places.length} esquinas agrupadas. Estimación actualizada ${updated}; se recalcula cada minuto. La ubicación es opcional.`;
+  else if(origin) $("status").textContent=`Mostrando ${limited.length} de ${places.length} esquinas cercanas. Estimación actualizada ${updated}; se recalcula cada minuto. La ubicación se procesa localmente.`;
+}
+function startMinuteRefresh(){
+  clearTimeout(refreshTimeout); clearInterval(refreshInterval);
+  const refresh=()=>{if(data&&document.visibilityState==='visible'&&activeRoute())renderStops(currentOrigin);};
+  refreshTimeout=setTimeout(()=>{
+    refresh();
+    refreshInterval=setInterval(refresh,60000);
+  },60000-(Date.now()%60000)+100);
 }
 function fmtWait(minutes){
   if(minutes<60) return `≈ ${minutes} min`;
@@ -134,7 +145,7 @@ async function init(){
     const names=["routes","trips","stop_times","frequencies","stops","feed_info"];
     const [loaded,addressResponse]=await Promise.all([
       Promise.all(names.map(async n=>{const r=await fetch(`${BASE}${n}.txt`);if(!r.ok)throw new Error(`No se pudo leer ${n}.txt`);return csv(await r.text());})),
-      fetch("./data/addresses.json?v=20261126-5",{cache:"no-store"})
+      fetch("./data/addresses.json?v=20261126-6",{cache:"no-store"})
     ]);
     if(!addressResponse.ok) throw new Error("No se pudo cargar la base de direcciones");
     const addresses=await addressResponse.json();
@@ -146,8 +157,7 @@ async function init(){
     for(const f of data.freq){let a=data.freqByTrip.get(f.trip_id)||[];a.push(f);data.freqByTrip.set(f.trip_id,a);}
     const select=$("line"); select.innerHTML=data.routes.slice().sort((a,b)=>a.route_short_name.localeCompare(b.route_short_name,'es',{numeric:true})).map(r=>`<option value="${esc(r.route_id)}">Línea ${esc(r.route_short_name)}</option>`).join('');
     if(data.routes.some(r=>r.route_id==="r511")) select.value="r511";
-    select.disabled=false; $("locate").disabled=false; select.addEventListener('change',updateLineStatus); updateLineStatus();
-    $("status").textContent=`Feed GTFS cargado · ${data.trips.length} viajes, ${data.stops.length} puntos de parada.`;
+    select.disabled=false; $("locate").disabled=false; select.addEventListener('change',updateLineStatus); updateLineStatus(); startMinuteRefresh();
   }catch(e){$("status").textContent=`No pude cargar los horarios: ${e.message}. Revisá la conexión e intentá recargar.`;}
 }
 $("locate").addEventListener('click',()=>{
@@ -156,6 +166,7 @@ $("locate").addEventListener('click',()=>{
   navigator.geolocation.getCurrentPosition(pos=>{visibleStopLimit=10;renderStops({lat:pos.coords.latitude,lon:pos.coords.longitude});},locationError,{enableHighAccuracy:false,timeout:25000,maximumAge:120000});
 });
 $("moreStops").addEventListener('click',()=>{visibleStopLimit+=12;renderStops(currentOrigin);});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&data&&activeRoute())renderStops(currentOrigin);});
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$("install").classList.remove('hidden');});
 $("install").addEventListener('click',async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$("install").classList.add('hidden');});
 window.addEventListener('appinstalled',()=>$("install").classList.add('hidden'));
