@@ -5,8 +5,9 @@ Versión estática e instalable para probar estimaciones de paso de colectivos e
 ## Funciones de esta prueba
 
 - Selección de las líneas y servicios incluidos en el feed GTFS.
+- Estimaciones aproximadas identificadas por destino/sentido cuando el GTFS publica una frecuencia; otros destinos se marcan sin estimación.
 - Solicitud opcional de ubicación para ordenar las paradas de la línea por cercanía. La ubicación se procesa localmente en el dispositivo y no se transmite.
-- Estimaciones aproximadas por frecuencia GTFS cuando hay viajes/frecuencias para la parada seleccionada.
+- Estimaciones aproximadas por frecuencia GTFS, separadas por el destino que informa el feed (por ejemplo, «Hacia Al Puerto»). Los destinos sin frecuencia publicada se identifican sin inventar una espera.
 - Manifest y service worker para instalarla como PWA y conservar la app y el feed en caché.
 - Direcciones de esquina para las paradas cuando coinciden con los datos de calles y paradas del proyecto original; no se inventa la altura numérica cuando no está en la fuente.
 - Enlaces de cada punto a la aplicación de mapas del teléfono y a Google Maps web.

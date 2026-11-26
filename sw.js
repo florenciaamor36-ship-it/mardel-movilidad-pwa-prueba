@@ -1,5 +1,5 @@
-const CACHE = "mardel-movilidad-gtfs-pwa-v8";
-const CORE = ["./", "./index.html", "./styles.css", "./app.js?v=20261126-3", "./manifest.webmanifest", "./assets/icon-192.png", "./assets/icon-512.png", "./data/addresses.json?v=20261126-3", "./data/gtfs/routes.txt", "./data/gtfs/trips.txt", "./data/gtfs/stop_times.txt", "./data/gtfs/frequencies.txt", "./data/gtfs/stops.txt", "./data/gtfs/feed_info.txt"];
+const CACHE = "mardel-movilidad-gtfs-pwa-v9";
+const CORE = ["./", "./index.html", "./styles.css", "./app.js?v=20261126-4", "./manifest.webmanifest", "./assets/icon-192.png", "./assets/icon-512.png", "./data/addresses.json?v=20261126-4", "./data/gtfs/routes.txt", "./data/gtfs/trips.txt", "./data/gtfs/stop_times.txt", "./data/gtfs/frequencies.txt", "./data/gtfs/stops.txt", "./data/gtfs/feed_info.txt"];
 self.addEventListener("install", event => { event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", event => {

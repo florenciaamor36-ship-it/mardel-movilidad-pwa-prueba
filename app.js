@@ -36,7 +36,6 @@ function renderStops(origin=null) {
   const list=buildStopList();
   const route=activeRoute();
   const lineName=route?.route_short_name||"";
-  const hasFrequency=route && data.freq.some(f=>data.tripById.get(f.trip_id)?.route_id===route.route_id);
   // The GTFS often lists the two sides/directions of the same intersection as separate stops.
   // Group only when the static source gives them the exact same street-corner label.
   const grouped=new Map();
@@ -55,14 +54,16 @@ function renderStops(origin=null) {
   $("stops").innerHTML=limited.map(place=>{
     const stop=place.representative;
     const stopIds=place.stops.map(s=>s.stop_id);
-    const mins=[...new Set(stopIds.flatMap(id=>nextTimes(id)))].sort((a,b)=>a-b).slice(0,3);
+    const predictions=nextTimesByDirection(stopIds);
     const title=place.address||"Dirección no disponible en los datos";
-    const times=mins.length?mins.map(m=>`<span class="time">${fmtWait(m)}</span>`).join(''):hasFrequency?`<span class="none">No hay una salida calculable para esta parada ahora.</span>`:`<span class="none">El feed no publica frecuencias para esta línea; no puedo estimar el próximo paso.</span>`;
+    const times=predictions.length?predictions.map(item=>`<div class="direction-row"><strong class="direction-name">Hacia ${esc(item.destination)}</strong><div class="times">${item.minutes.map(m=>`<span class="time">${fmtWait(m)}</span>`).join('')}</div></div>`).join(''):`<span class="none">El feed no da una próxima estimación para esta parada.</span>`;
+    const missingDirections=[...new Set(stopIds.flatMap(id=>data.stopTimesByStop.get(id)||[]).filter(st=>data.tripById.get(st.trip_id)?.route_id===route?.route_id&&!data.freqByTrip.has(st.trip_id)).map(st=>data.tripById.get(st.trip_id)?.trip_headsign).filter(Boolean))];
+    const notEstimated=missingDirections.length?`<div class="direction-note">Sin frecuencia publicada para: ${missingDirections.map(esc).join(', ')}.</div>`:'';
     const lat=Number(stop.stop_lat),lon=Number(stop.stop_lon);
     const mapApp=`geo:${lat},${lon}?q=${lat},${lon}`;
     const mapWeb=`https://maps.google.com/?q=${lat},${lon}`;
     const detail=`Parada · Línea ${esc(lineName)}${place.address?' · cruce aproximado':''}${place.stops.length>1?` · ${place.stops.length} puntos cercanos agrupados`:''}`;
-    return `<article class="stop"><div class="stop-head"><div><div class="stop-title">${esc(title)}</div><div class="address-meta">${detail}</div></div>${place.distance===null?'':`<span class="distance">${fmtDistance(place.distance)}</span>`}</div><div class="times">${times}</div><a class="maplink" href="${mapApp}">Abrir en la app de mapas ↗</a> · <a class="maplink" href="${mapWeb}" target="_blank" rel="noopener noreferrer">Google Maps web</a></article>`;
+    return `<article class="stop"><div class="stop-head"><div><div class="stop-title">${esc(title)}</div><div class="address-meta">${detail}</div></div>${place.distance===null?'':`<span class="distance">${fmtDistance(place.distance)}</span>`}</div>${times}${notEstimated}<a class="maplink" href="${mapApp}">Abrir en la app de mapas ↗</a> · <a class="maplink" href="${mapWeb}" target="_blank" rel="noopener noreferrer">Google Maps web</a></article>`;
   }).join('') || '<div class="empty">No hay paradas cargadas para esta línea en el feed.</div>';
   if(!origin && list.length) $("status").textContent=`Mostrando ${limited.length} esquinas agrupadas de ${list.length} puntos de parada. La ubicación es opcional; si la habilitás, se ordenan por cercanía.`;
   else if(origin) $("status").textContent=`Esquinas cercanas agrupadas y ordenadas por distancia. La ubicación se procesa localmente.`;
@@ -74,16 +75,21 @@ function fmtWait(minutes){
 }
 
 function hasRouteFrequency(routeId){return data.freq.some(f=>data.tripById.get(f.trip_id)?.route_id===routeId);}
-function nextTimes(stopId) {
+function nextTimesByDirection(stopIds) {
   const current=nowSeconds(), route=activeRoute(); if(!route||!hasRouteFrequency(route.route_id)) return [];
   const tripIds=new Set(lineTrips().map(t=>t.trip_id));
-  const stopTimes=data.stopTimesByStop.get(stopId)||[]; const output=[];
-  for(const st of stopTimes){
+  const candidates=stopIds.flatMap(id=>data.stopTimesByStop.get(id)||[]);
+  const output=new Map();
+  for(const st of candidates){
     if(!tripIds.has(st.trip_id)) continue;
+    const trip=data.tripById.get(st.trip_id);
+    const destination=(trip?.trip_headsign||'Destino no informado').trim();
+    const windows=data.freqByTrip.get(st.trip_id)||[];
+    if(!windows.length) continue;
     const tripTimes=data.stopTimesByTrip.get(st.trip_id)||[];
     if(!tripTimes.length) continue;
     const first=tripTimes[0]; const offset=(sec(st.arrival_time)??0)-(sec(first.departure_time)??0);
-    const windows=data.freqByTrip.get(st.trip_id)||[];
+    const minutes=output.get(destination)||new Set();
     for(const w of windows){
       const start=sec(w.start_time),end=sec(w.end_time),headway=+w.headway_secs;
       if(start===null||end===null||!Number.isFinite(headway)||headway<=0) continue;
@@ -91,11 +97,12 @@ function nextTimes(stopId) {
       for(let k=0;k<4;k++,n++){
         const leave=start+n*headway, at=leave+offset;
         if(leave>=end||at<current||at>current+24*3600) break;
-        const m=Math.max(1,Math.ceil((at-current)/60)); output.push(m);
+        minutes.add(Math.max(1,Math.ceil((at-current)/60)));
       }
     }
+    output.set(destination,minutes);
   }
-  return [...new Set(output.sort((a,b)=>a-b))].slice(0,3);
+  return [...output.entries()].map(([destination,minutes])=>({destination,minutes:[...minutes].sort((a,b)=>a-b).slice(0,3)})).filter(x=>x.minutes.length);
 }
 function updateLineStatus(){
   const route=activeRoute(); if(!route)return;
@@ -120,7 +127,7 @@ async function init(){
     const names=["routes","trips","stop_times","frequencies","stops","feed_info"];
     const [loaded,addressResponse]=await Promise.all([
       Promise.all(names.map(async n=>{const r=await fetch(`${BASE}${n}.txt`);if(!r.ok)throw new Error(`No se pudo leer ${n}.txt`);return csv(await r.text());})),
-      fetch("./data/addresses.json?v=20261126-3",{cache:"no-store"})
+      fetch("./data/addresses.json?v=20261126-4",{cache:"no-store"})
     ]);
     if(!addressResponse.ok) throw new Error("No se pudo cargar la base de direcciones");
     const addresses=await addressResponse.json();
