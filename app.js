@@ -34,24 +34,38 @@ function buildStopList() {
 }
 function renderStops(origin=null) {
   const list=buildStopList();
-  if(origin) list.sort((a,b)=>hav(origin,a)-hav(origin,b));
-  const limited=list.slice(0, origin?10:12);
   const route=activeRoute();
   const lineName=route?.route_short_name||"";
   const hasFrequency=route && data.freq.some(f=>data.tripById.get(f.trip_id)?.route_id===route.route_id);
-  $("stops").innerHTML=limited.map(stop=>{
-    const distance=origin?hav(origin,stop):null;
-    const mins=nextTimes(stop.stop_id);
+  // The GTFS often lists the two sides/directions of the same intersection as separate stops.
+  // Group only when the static source gives them the exact same street-corner label.
+  const grouped=new Map();
+  for(const stop of list){
     const address=data.addresses?.routes?.[lineName]?.[stop.stop_id]?.text;
-    const title=address||"Dirección no disponible en los datos";
+    const key=address?`address:${address}`:`stop:${stop.stop_id}`;
+    if(!grouped.has(key)) grouped.set(key,{address,stops:[]});
+    grouped.get(key).stops.push(stop);
+  }
+  const places=[...grouped.values()].map(group=>{
+    const representative=origin?group.stops.slice().sort((a,b)=>hav(origin,a)-hav(origin,b))[0]:group.stops[0];
+    return {...group,representative,distance:origin?Math.min(...group.stops.map(s=>hav(origin,s))):null};
+  });
+  if(origin) places.sort((a,b)=>a.distance-b.distance);
+  const limited=places.slice(0, origin?10:12);
+  $("stops").innerHTML=limited.map(place=>{
+    const stop=place.representative;
+    const stopIds=place.stops.map(s=>s.stop_id);
+    const mins=[...new Set(stopIds.flatMap(id=>nextTimes(id)))].sort((a,b)=>a-b).slice(0,3);
+    const title=place.address||"Dirección no disponible en los datos";
     const times=mins.length?mins.map(m=>`<span class="time">${fmtWait(m)}</span>`).join(''):hasFrequency?`<span class="none">No hay una salida calculable para esta parada ahora.</span>`:`<span class="none">El feed no publica frecuencias para esta línea; no puedo estimar el próximo paso.</span>`;
     const lat=Number(stop.stop_lat),lon=Number(stop.stop_lon);
     const mapApp=`geo:${lat},${lon}?q=${lat},${lon}`;
     const mapWeb=`https://maps.google.com/?q=${lat},${lon}`;
-    return `<article class="stop"><div class="stop-head"><div><div class="stop-title">${esc(title)}</div><div class="address-meta">Parada · Línea ${esc(lineName)}${address?' · cruce aproximado':''}</div></div>${distance===null?'':`<span class="distance">${fmtDistance(distance)}</span>`}</div><div class="times">${times}</div><a class="maplink" href="${mapApp}">Abrir en la app de mapas ↗</a> · <a class="maplink" href="${mapWeb}" target="_blank" rel="noopener noreferrer">Google Maps web</a></article>`;
+    const detail=`Parada · Línea ${esc(lineName)}${place.address?' · cruce aproximado':''}${place.stops.length>1?` · ${place.stops.length} puntos cercanos agrupados`:''}`;
+    return `<article class="stop"><div class="stop-head"><div><div class="stop-title">${esc(title)}</div><div class="address-meta">${detail}</div></div>${place.distance===null?'':`<span class="distance">${fmtDistance(place.distance)}</span>`}</div><div class="times">${times}</div><a class="maplink" href="${mapApp}">Abrir en la app de mapas ↗</a> · <a class="maplink" href="${mapWeb}" target="_blank" rel="noopener noreferrer">Google Maps web</a></article>`;
   }).join('') || '<div class="empty">No hay paradas cargadas para esta línea en el feed.</div>';
-  if(!origin && list.length) $("status").textContent=`Mostrando ${limited.length} paradas de ${list.length}. La ubicación es opcional; si la habilitás, se ordenan por cercanía.`;
-  else if(origin) $("status").textContent=`Paradas cercanas ordenadas por distancia. La ubicación se procesa localmente.`;
+  if(!origin && list.length) $("status").textContent=`Mostrando ${limited.length} esquinas agrupadas de ${list.length} puntos de parada. La ubicación es opcional; si la habilitás, se ordenan por cercanía.`;
+  else if(origin) $("status").textContent=`Esquinas cercanas agrupadas y ordenadas por distancia. La ubicación se procesa localmente.`;
 }
 function fmtWait(minutes){
   if(minutes<60) return `≈ ${minutes} min`;
@@ -106,7 +120,7 @@ async function init(){
     const names=["routes","trips","stop_times","frequencies","stops","feed_info"];
     const [loaded,addressResponse]=await Promise.all([
       Promise.all(names.map(async n=>{const r=await fetch(`${BASE}${n}.txt`);if(!r.ok)throw new Error(`No se pudo leer ${n}.txt`);return csv(await r.text());})),
-      fetch("./data/addresses.json?v=20261126-2",{cache:"no-store"})
+      fetch("./data/addresses.json?v=20261126-3",{cache:"no-store"})
     ]);
     if(!addressResponse.ok) throw new Error("No se pudo cargar la base de direcciones");
     const addresses=await addressResponse.json();
