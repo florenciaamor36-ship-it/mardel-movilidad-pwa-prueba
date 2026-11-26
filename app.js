@@ -43,7 +43,7 @@ function renderStops(origin=null) {
     const distance=origin?hav(origin,stop):null;
     const mins=nextTimes(stop.stop_id);
     const address=data.addresses?.routes?.[lineName]?.[stop.stop_id]?.text;
-    const title=address||"Esquina no identificada en los datos";
+    const title=address||"Dirección no disponible en los datos";
     const times=mins.length?mins.map(m=>`<span class="time">${fmtWait(m)}</span>`).join(''):hasFrequency?`<span class="none">No hay una salida calculable para esta parada ahora.</span>`:`<span class="none">El feed no publica frecuencias para esta línea; no puedo estimar el próximo paso.</span>`;
     const lat=Number(stop.stop_lat),lon=Number(stop.stop_lon);
     const mapApp=`geo:${lat},${lon}?q=${lat},${lon}`;
@@ -106,9 +106,10 @@ async function init(){
     const names=["routes","trips","stop_times","frequencies","stops","feed_info"];
     const [loaded,addressResponse]=await Promise.all([
       Promise.all(names.map(async n=>{const r=await fetch(`${BASE}${n}.txt`);if(!r.ok)throw new Error(`No se pudo leer ${n}.txt`);return csv(await r.text());})),
-      fetch("./data/addresses.json")
+      fetch("./data/addresses.json?v=20261126-2",{cache:"no-store"})
     ]);
-    const addresses=addressResponse.ok?await addressResponse.json():{routes:{}};
+    if(!addressResponse.ok) throw new Error("No se pudo cargar la base de direcciones");
+    const addresses=await addressResponse.json();
     data={routes:loaded[0],trips:loaded[1],stopTimes:loaded[2],freq:loaded[3],stops:loaded[4],feedInfo:loaded[5],addresses};
     data.stopById=new Map(data.stops.map(s=>[s.stop_id,s])); data.tripById=new Map(data.trips.map(t=>[t.trip_id,t]));
     data.stopTimesByStop=new Map(); data.stopTimesByTrip=new Map(); data.freqByTrip=new Map();
